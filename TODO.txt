@@ -1,0 +1,9 @@
+TODO
+
+index.js - app
+1. Add retire functionality to current leader
+(make use of consul module to do consul.session.destroy())
+2. Inter leader consensus
+
+Presentation
+1. Change the animation to incorporate PoS
