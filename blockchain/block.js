@@ -42,12 +42,12 @@ class Block {
   }
 
   static hash(timestamp, lastHash, data) {
-    return ChainUtil.hash(`${timestamp}${lastHash}${data}${nonce}${difficulty}`).toString();
+    return ChainUtil.hash(`${timestamp}${lastHash}${data}`).toString();
   }
 
   static blockHash(block) {
-    const { timestamp, lastHash, data, nonce, difficulty } = block;
-    return Block.hash(timestamp, lastHash, data, nonce, difficulty);
+    const { timestamp, lastHash, data} = block;
+    return Block.hash(timestamp, lastHash, data);
   }
 
 /*

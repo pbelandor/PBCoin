@@ -6,8 +6,8 @@ const request = require('request');
 let gatherBets = {};
 let ping_counter = 0;
 let received_counter = 0;
+let sockets = [];
 
-const P2P_PORT = process.env.P2P_PORT || 5005;
 let peers = process.env.PEERS ? process.env.PEERS.split(',') : [];
 const MESSAGE_TYPES = {
   chain: 'CHAIN',
@@ -15,52 +15,49 @@ const MESSAGE_TYPES = {
   clear_transactions: 'CLEAR_TRANSACTIONS',
   betting_begin: "BEGIN_BETTING",
   bets: "BETS"
-
 };
 
 class P2pServer {
-  constructor(blockchain, transactionPool) {
+  constructor(blockchain, transactionPool, P2P_PORT, peers) {
     this.blockchain = blockchain;
     this.transactionPool = transactionPool;
     this.sockets = [];
+    this.constituencyID = "";
     this.p2p_port = P2P_PORT;
     this.bets = [];
+    this.flag = 0;
+    this.peers = peers;
   }
 
-  connectSocket(socket) {
-    //console.log(Object.values(socket));
-    this.sockets.push(socket);
-    console.log('Socket connected');
-
-    this.messageHandler(socket);
-
-    this.sendChain(socket);
+  setConstituencyID(cid){
+    this.constituencyID = cid;
   }
 
   listen() {
-    const server = new Websocket.Server({ port: P2P_PORT });
-    let ip = "";
-    let peer = "";
+    const server = new Websocket.Server({ port: this.p2p_port });
     server.on('connection', socket => this.connectSocket(socket));
-
     this.connectToPeers();
-
-    console.log(`Listening for peer-to-peer connections on: ${P2P_PORT}`);
+    console.log(`Listening for peer-to-peer connections on: ${this.p2p_port}`);
   }
 
   connectToPeers() {
-    peers.forEach(peer => {
-      this.sockets.forEach(socket => {
-        if(socket.url != peer){
-          //
-        } else {
-          const sock = new Websocket(peer);
-          sock.on('open', () => this.connectSocket(sock));        }
-      });    
+    this.peers.forEach(peer => {
+      const socket = new Websocket(peer);
+      socket.on('open', () => this.connectSocket(socket));
     });
   }
 
-  requestGetPeers(constituencyID) {
+  connectSocket(socket) {
+    this.sockets.push(socket);
+    this.messageHandler(socket);
+    this.sendChain(socket);
+}
+
+  
+  requestGetPeers() {
+    console.log("In requestGetPeers...")
+    console.log("*****: "+sockets)
+
     // Set the headers
     var headers = {
         'User-Agent':       'Super Agent/0.0.1',
@@ -72,28 +69,122 @@ class P2pServer {
         url: 'http://127.0.0.1:8700/getPeers',
         method: 'POST',
         headers: headers,
-        form: {'constituencyID':constituencyID}
+        form: {'constituencyID':this.constituencyID}
     }
+
+    var self = this;
 
     // Start the request
     request(options, function (error, response, body) {
         if (!error && response.statusCode == 200) {
             // Print out the response body
             console.log("Peers:\n"+body)
-            peers = body;
+            console.log("*****: "+sockets);
+            peers = JSON.parse(body);
+            console.log(peers[0]);
+            setTimeout(self.connectToPeers, 5000)
         }
     });
-    return;
   }
 
-  
+  updatePeers(updated_peers) {
+    this.peers = updated_peers;
+    this.connectToPeers();
+  }
+
+  getConstituencyPeers(){
+    // Set the headers
+    var headers = {
+        'User-Agent':       'Super Agent/0.0.1',
+        'Content-Type':     'application/x-www-form-urlencoded'
+    }
+
+    // Configure the request
+    var options = {
+        url: 'http://127.0.0.1:8700/getPeers',
+        method: 'POST',
+        headers: headers,
+        form: {'constituencyID':this.constituencyID}
+    }
+
+
+    // Start the request
+    request(options, function (error, response, body) {
+        if (!error && response.statusCode == 200) {
+            peers = JSON.parse(body);
+            console.log("NEWEST PEERS: "+ peers);
+            this.updatePeers(peers);
+            this.PoS();
+        }
+    });
+  }
+ 
 
   PoS(){
-    console.log("IN PoS...");
-    var keys = Object.keys(gatherBets).sort();
-    console.log("KeyS: "+keys);
-    let rawMatrix = utility.Create2DArray(keys.length);
-    var posMatrix = utility.createPosMatrix(rawMatrix, gatherBets, keys.length, keys)
+    
+    this.peers = utility.removeDuplicates(this.peers);
+    this.peers.sort();
+    var no_of_participants = this.peers.length;
+    console.log("Peers: "+this.peers);
+    console.log("No of participants: "+no_of_participants);
+    let rawMatrix = utility.Create2DArray(no_of_participants);
+    let wtMatrix = utility.Create2DArray(no_of_participants);
+    let probMatrix = utility.Create2DArray(no_of_participants);
+
+    var posMatrix = utility.createPosMatrix(rawMatrix, no_of_participants);
+    utility.printMatrix(posMatrix, no_of_participants)
+    utility.GetTotals(posMatrix, no_of_participants)
+    wtMatrix = utility.GetWts(wtMatrix, posMatrix, no_of_participants);
+    probMatrix = utility.GetProbs(probMatrix, wtMatrix, no_of_participants);
+    utility.printMatrix(probMatrix, no_of_participants);
+    let winnerCouple = utility.RunRoulette(probMatrix, no_of_participants);
+    let A = parseInt(winnerCouple.better);
+    console.log(typeof(A))
+    let B = parseInt(winnerCouple.bettee);
+    console.log("Winning Couple!\nBetter: "+this.peers[A]+" and Bettee :"+this.peers[B]);
+
+
+    var headers = {
+        'User-Agent':       'Super Agent/0.0.1',
+        'Content-Type':     'application/x-www-form-urlencoded'
+        }
+
+    // Configure the request
+    var options = {
+        url: 'http://127.0.0.1:8700/blockMined',
+        method: 'GET',
+        headers: headers,
+        qs: {"miner": '127.0.0.1:3'+this.peers[A].slice(-3), "constituencyID": this.constituencyID}
+    }
+    // Start the request
+    request(options, function (error, response, body) {
+        if (!error && response.statusCode == 200) {
+            console.log(body);
+        }
+    });
+
+
+    // Send request to bettee to mine transactions into block
+    // Set the headers
+    var headers = {
+        'User-Agent':       'Super Agent/0.0.1',
+        'Content-Type':     'application/x-www-form-urlencoded'
+    }
+
+    // Configure the request
+    var options = {
+        url: 'http://127.0.0.1:3'+this.peers[B].slice(-3)+'/mine-transactions',
+        method: 'GET',
+        headers: headers,
+        qs: {}
+    }
+    // Start the request
+    request(options, function (error, response, body) {
+        if (!error && response.statusCode == 200) {
+            console.log(body);
+            console.log("Bettee has successfully Mined block.");
+        }
+    });
   }
 
   gatherBetsFromNodes(sender_bets, sender){
@@ -125,7 +216,7 @@ class P2pServer {
   prepareBets(leaderAddress) {
     console.log("IN prepareBets...");
     console.log("prepareBets.LEADER_ADDRESS: "+leaderAddress);
-    this.sockets.forEach(socket => {
+    sockets.forEach(socket => {
       //ip = socket.
       //console.log("Socket IP Addresses")
       console.log("Socket URL inside Prepare BEts: "+socket.url)
@@ -142,7 +233,7 @@ class P2pServer {
       console.log("Bet: "+bet);
     })
     // Find the leader in sockets
-    this.sockets.forEach(socket => {
+    sockets.forEach(socket => {
       console.log("SOCKET URL: "+socket.url)
       console.log("LEADER ADDRESS: "+leaderAddress)
       if(leaderAddress == socket.url){
@@ -168,6 +259,7 @@ class P2pServer {
           break;
          //Watch for leader
         case MESSAGE_TYPES.betting_begin:
+          this.requestGetPeers();
           this.prepareBets(data.leaderAddress);
           console.log("In Message Handler: "+data.leaderAddress)
           break;
@@ -177,11 +269,12 @@ class P2pServer {
       }
     });
   }
-
+//2
   sendBettingRoundPing(socket, leaderAddress) {
     console.log("IN sendBettingRoundPing...");
     console.log("sendBettingRoundPing.LEADER_ADDRESS: "+leaderAddress);
     console.log("sendBettingRoundPing.socket: "+socket.readyState);
+    console.log("*****: "+sockets)
     ping_counter = ping_counter + 1;
     console.log("Ping_counter: "+ping_counter)
     socket.send(JSON.stringify({
@@ -192,18 +285,14 @@ class P2pServer {
     
   }
 
-  broadcastBettingRound(leaderAddress, constituencyID) {
+// 1
+  broadcastBettingRound(leaderAddress) {
     console.log("IN broadcastParticipationRequest...");
     console.log("broadcastParticipationRequest.LEADER_ADDRESS: "+leaderAddress);
-    //console.log("CHECK: "+this.sockets[0].url)
-    //setTimeout(this.PoS, 25000);
-    this.requestGetPeers(constituencyID);
-    this.connectToPeers();
-    this.sockets.forEach(socket => {
-      console.log(Object.keys(socket));
+    sockets.forEach(socket => {
+      console.log("Sending ping to: "+socket.url);
       this.sendBettingRoundPing(socket, leaderAddress);
     });
-    setTimeout(this.PoS, 10000)
   }
 
   sendChain(socket) {
@@ -220,16 +309,21 @@ class P2pServer {
     }));
   }
 
+  syncLeaders() {
+    sockets.forEach(socket => this.sendchain(socket))
+  }
+
   syncChains() {
-    this.sockets.forEach(socket => this.sendChain(socket));
+    sockets.forEach(socket => this.sendChain(socket));
   }
 
   broadcastTransaction(transaction) {
-    this.sockets.forEach(socket => this.sendTransaction(socket, transaction));
+    sockets.forEach(socket => this.sendTransaction(socket, transaction));
+    
   }
 
   broadcastClearTransactions() {
-    this.sockets.forEach(socket => socket.send(JSON.stringify({
+    sockets.forEach(socket => socket.send(JSON.stringify({
       type: MESSAGE_TYPES.clear_transactions
     })));
   }

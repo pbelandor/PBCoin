@@ -1,7 +1,28 @@
+let N = 0;
+let W = 0;
+let P = 0;
+let total_spent = [];
+let total_bet_on = [];
+
 class Utility{
 
 	constructor(){
 		//
+	}
+
+	removeDuplicates(arr){
+    	let unique_array = Array.from(new Set(arr));
+    	return unique_array;
+	}
+
+
+	printMatrix(matrix, rows){
+		console.log("In printMatrix")
+		for(var i=0; i<rows; i++){
+	      for(var j=0; j<rows; j++){
+	        console.log(i+" to "+j+": "+matrix[i][j])
+	      }
+	    }
 	}
 
 	Create2DArray(rows) {
@@ -12,41 +33,33 @@ class Utility{
 	  return arr;
 	}
 
-	createPosMatrix(rawMatrix, bets, rows, keys) {
-		console.log("OBJECT :"+bets);
+	createPosMatrix(rawMatrix, rows) {
 		for(var i=0; i<rows; i++){
-			console.log("Bets from i: "+bets[keys[i]]);
-			let bets_from_i = Object.values(bets[keys[i]])
-			console.log("YYYY: "+typeof(bets_from_i))
-			
 			for(var j=0; j<rows; j++){
 				if(i==j) {
 					rawMatrix[i][j] = 0;
 				} else {
-					let bets_from_i_to_j = "";
-					console.log("Inside loop: "+bets[keys[i]]);
-					bets_from_i_to_j = bets_from_i[j].split("~")[1];
-					console.log("OOOOPS: "+bets_from_i_to_j);
-					//rawMatrix[i][j] = bets_from_i_to[j].split("~")[1];
+					rawMatrix[i][j] = (Math.random() * 10).toFixed(2);
 				}
 			}
 		}
+		return rawMatrix;
 	}
 
-	GetTotals(raw_matrix, rows)
+	GetTotals(posMatrix, rows)
 	{	  
 	  for(var i=0; i<rows; i++){
-	    sum_1 = 0;
-	    sum_2 = 0;
-	    for(j=0; j<rows; j++){
-	      sum_1 = sum_1 + raw_matrix[i][j];
-	      sum_2 = sum_2 + raw_matrix[j][i];
+	    let sum_1 = 0;
+	    let sum_2 = 0;
+	    for(var j=0; j<rows; j++){
+	      sum_1 = sum_1 + posMatrix[i][j];
+	      sum_2 = sum_2 + posMatrix[j][i];
 	    }
 	    total_spent[i] = sum_1;
 	    total_bet_on[i] = sum_2;
 	  }       
 
-	  for(i=0; i<rows; i++){
+	  for(var i=0; i<rows; i++){
 	   N = N + parseFloat(total_bet_on[i]);
 	  }
 	  console.log("N: "+N)
@@ -64,7 +77,7 @@ class Utility{
 	  }
 	  console.log("W: "+W)
 
-	  //return wt_array;
+	  return wt_array;
 	}
 
 	GetProbs(prob_array, wt_array, rows)
@@ -76,7 +89,33 @@ class Utility{
 	            P = P + parseFloat(prob_array[i][j]);
 	        }
 	  }
-	  //return prob_array;
+	  return prob_array;
+	}
+
+	RunRoulette(prob_array, rows)
+	{
+	  let winner_couple = {};
+	  let ball_on = Math.random()
+	  console.log("Ball on: "+ ball_on)
+	  let sum = 0
+	  for(var i = 0; i<rows; i++)
+	  {
+		   for(var j = 0; j<rows; j++){
+		    sum = sum+parseFloat(prob_array[i][j]);
+		       if(ball_on <= sum){
+		       		console.log("i: "+i+" j: "+j)
+		       		winner_couple['better'] = i;
+		       		winner_couple['bettee'] = j;
+		       		return winner_couple;
+		       } 
+		   }   
+	  }
+	
+	  N=0;
+	  W=0;
+	  P=0;
+	  total_spent = [];
+	  total_bet_on = [];
 	}
 }
 

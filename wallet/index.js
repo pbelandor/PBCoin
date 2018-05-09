@@ -20,6 +20,7 @@ class Wallet {
   }
 
   createTransaction(recipient, amount, blockchain, transactionPool) {
+    console.log("In createTransaction...")
     this.balance = this.calculateBalance(blockchain);
 
     if (amount > this.balance) {

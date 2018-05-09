@@ -18,7 +18,7 @@ function upvotePost(){
 			}
 	    }
 	};
-    xhttp.open("GET", "http://localhost:8300?vote=up", true);
+    xhttp.open("GET", "http://localhost:8700/vote?vote=up", true);
     xhttp.send();
     return;
 }
@@ -36,7 +36,7 @@ function downvotePost(id){
 	   		}
 	    }
 	};
-    xhttp.open("GET", "http://localhost:8300/post.html?vote=down", true);
+    xhttp.open("GET", "http://localhost:8700/vote?vote=down", true);
     xhttp.send();
     return;
 }

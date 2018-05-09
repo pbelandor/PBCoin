@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html>
+<body>
+  <style>
+    #inp-matrix-dimension, #button1, #inp-random-custom, #radio-opt {
+      display: block;
+      margin-right: auto;
+      margin-left: auto;
+    }
+
+    table{
+      border: solid black 1px;
+      margin: 0px auto;
+    }
+
+    .matrix {
+      align: center;
+    }
+
+    h2 {
+      font-family: verdana,arial,sans-serif;
+    }
+
+    span {
+      font-size: 28px;
+    }
+
+    table.gridtable {
+      font-family: verdana,arial,sans-serif;
+      font-size:20px;
+      color:#333333;
+      border-width: 1px;
+      border-color: #666666;
+      border-collapse: collapse;
+    }
+    table.gridtable th {
+      border-width: 1px;
+      padding: 8px;
+      border-style: solid;
+      border-color: #666666;
+      background-color: #dedede;
+    }
+    table.gridtable td {
+      border-width: 1px;
+      padding: 8px;
+      border-style: solid;
+      border-color: #666666;
+      background-color: #ffffff;
+    }
+    .hide {
+      visibility: hidden;
+    }
+
+</style>
+
+<script>
+
+/*
+  Global Stuff
+*/
+
+//Alphabet array for node identities
+nodes = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'] //Max of 10 nodes allowed
+var N = 0;
+var W = 0;
+var P = 0;
+var matrix_dimensions = 0;
+total_spent = [];
+total_bet_on = [];
+var pos_array;
+var wt_array;
+var prob_array;
+
+function Create2DArray(rows) {
+  var arr = [];
+
+  for (var i=0;i<rows;i++) {
+     arr[i] = [];
+  }
+
+  return arr;
+}
+
+function GetBets(pos_array, rows, random_or_custom)
+{
+   
+   //Case: Custom Input
+   if(random_or_custom == "custom"){
+      for(var i=0; i<rows; i++){
+        for(var j=0; j<rows; j++){
+            if(i==j) pos_array[i][j] = 0;
+            else pos_array[i][j] = parseFloat(prompt("Bet from node "+nodes[i]+" to node "+nodes[j]));
+            console.log(pos_array[i][j])
+        }
+      }
+   } 
+   //Case: Random Input
+   else {
+      for(var i=0; i<rows; i++){
+        for(var j=0; j<rows; j++){
+            //Returns random number between 0 and 9
+            if(i==j) pos_array[i][j] = 0;
+            else pos_array[i][j] = (Math.random() * 10).toFixed(2);
+        }
+      }
+   }
+
+   //return pos_array;
+}
+
+function printMatrix(array, rows, table_id){
+  var table = document.getElementById(table_id);
+  console.log(table_id);
+  var column_headers = table.insertRow(-1);
+  cell = column_headers.insertCell(0).innerHTML="";
+  for(i=1; i<=rows; i++){
+    cell = column_headers.insertCell(i)
+    cell.innerHTML = "<b>"+nodes[i-1]+"<b>";
+  }
+  for(i=0; i<rows; i++){
+    var row = table.insertRow(-1);
+    cell = row.insertCell(0);
+    cell.innerHTML = "<b>"+nodes[i]+"<b>"
+    for(j=0; j<rows; j++){
+      cell = row.insertCell(j+1)
+      cell.innerHTML = array[i][j]
+    }
+  }
+}
+
+function GetTotals(pos_array, rows)
+{
+  
+  for(i=0; i<rows; i++){
+    sum_1 = 0;
+    sum_2 = 0;
+    for(j=0; j<rows; j++){
+      sum_1 = sum_1 + pos_array[i][j];
+      sum_2 = sum_2 + pos_array[j][i];
+    }
+    total_spent[i] = sum_1;
+    total_bet_on[i] = sum_2;
+  }       
+
+  for(i=0; i<rows; i++){
+   N = N + parseFloat(total_bet_on[i]);
+  }
+  console.log("N: "+N)
+}
+
+function GetWts(wt_array, pos_array, rows)
+{
+  for(var i=0; i<rows; i++){
+        for(var j=0; j<rows; j++){
+            //Returns random number between 0 and 9
+            wt_array[i][j] = (parseFloat(pos_array[i][j])*(N/parseFloat(total_bet_on[j]))).toFixed(2);
+            W = W + parseFloat(wt_array[i][j]);
+        }
+  }
+  console.log("W: "+W)
+
+  //return wt_array;
+}
+
+
+function GetProbs(prob_array, wt_array, rows)
+{
+  for(var i=0; i<rows; i++){
+        for(var j=0; j<rows; j++){
+            //Returns random number between 0 and 9
+            prob_array[i][j] = (parseFloat(wt_array[i][j])/W).toFixed(2);
+            P = P + parseFloat(prob_array[i][j]);
+        }
+  }
+  //return prob_array;
+}
+
+function CalculateProbabilities() 
+{
+  //document.getElementById("raw-matrix-table").innerHTML = "";
+  //document.getElementById("wt-matrix-table").innerHTML = "";
+  //document.getElementById("prob-matrix-table").innerHTML = "";
+  var matrix_dimensions = parseInt(document.getElementById("inp-matrix-dimension").value);
+  var random_or_custom = document.querySelector('input[name="random-or-custom"]:checked').value;
+  //Initialize an n-dimensional array
+  pos_array = Create2DArray(matrix_dimensions)
+  GetBets(pos_array, matrix_dimensions, random_or_custom)
+  printMatrix(pos_array, matrix_dimensions, "raw-matrix-table")
+  GetTotals(pos_array, matrix_dimensions)
+  wt_array = Create2DArray(matrix_dimensions)
+  GetWts(wt_array, pos_array, matrix_dimensions)
+  //GetTotals(pos_array, matrix_dimensions)
+  prob_array = Create2DArray(matrix_dimensions)
+  GetProbs(prob_array, wt_array, matrix_dimensions)
+  printMatrix(wt_array, matrix_dimensions, "wt-matrix-table")
+  printMatrix(prob_array, matrix_dimensions, "prob-matrix-table")
+  RunRoulette(prob_array, matrix_dimensions);
+  var x = document.getElementsByClassName("hide");
+  var i;
+  for (i = 0; i < x.length; i++) {
+      x[i].style.visibility = "visible";
+  }
+}
+
+
+
+function RunRoulette(prob_array, rows)
+{
+  paaras=Math.random().toFixed(2)
+  console.log("Ball on: "+ paaras)
+  sum=0
+  for(i=0;i<rows; i++)
+  {
+   for(j=0; j<rows; j++){
+    sum=sum+parseFloat(prob_array[i][j]);
+    console.log("Sum: "+sum)
+      if(paaras<=sum){
+       document.getElementById("roulette-result").innerHTML="Roulette Wheel results in Probability: "+paaras+"<br>Node <span>"+nodes[i]+" & "+nodes[j]+"</span>";
+       return;
+       } 
+   }
+      
+  }
+}
+
+
+
+</script>
+
+<h2 align="center">Implementing Probability of calculation</h2>
+<input type="number" id="inp-matrix-dimension"><br>
+<div id="radio-opt" align="center">
+  <input type="radio" name="random-or-custom" value="random" checked>Randomized Input<br>
+  <input type="radio" name="random-or-custom" value="custom">Customized Input<br> 
+</div>
+<button type="button" id="button1" onclick="CalculateProbabilities()">Create Matrices</button><br/>
+<div id="raw-matrix" class="matrix"><table id="raw-matrix-table" class="gridtable"><caption class="hide">Bet Matrix</caption></table></div><br/>
+<div id="wt-matrix" class="matrix" class="matrix"><table id="wt-matrix-table" class="gridtable"><caption class="hide">Weight Matrix</caption></table></div><br/>
+<div id="prob-matrix" class="matrix"><table id="prob-matrix-table" class="gridtable"><caption class="hide">Probability Matrix</caption></table></div><br/>
+<div id="roulette-result" class="matrix" align="center"></div>
+
+
+</body>
+</html>

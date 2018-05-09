@@ -9,12 +9,13 @@ var sendButton = document.getElementById("sendButton");
 sendButton.onclick = function() {
 	var xhttp = new XMLHttpRequest();
 	var amount = document.getElementById("amount").value;
+    console.log(amount);
   	xhttp.onreadystatechange = function() {
 	    if (this.readyState == 4 && this.status == 200) {
 	    	console.log("Money Sent!")
 	    }
 	};
-    xhttp.open("GET", "http://localhost:8300/sendMoney?amt="+amount, true);
+    xhttp.open("GET", "http://localhost:8700/sendMoney?amt="+amount+"&recipient=Paaras123", true);
     xhttp.send();
 }
 

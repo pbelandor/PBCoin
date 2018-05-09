@@ -37,7 +37,7 @@ app.get("/vote", (req, res) => {
 })
 
 app.get("/sendMoney", (req, res) => {
-	coordinator.makeTransaction(req.amt, req.recipient, req.sender);
+	coordinator.makeTransaction(req.param('amt'), req.param('recipient'));
 	res.status(200);
 })
 
@@ -46,14 +46,13 @@ II. Handling node registration
 */
 
 app.post('/registerNode', (req, res) => {
-	console.log("Here...")
+  //console.log("Here...")
   http_address = req.body.http_address;
   client_publicKey = req.body.client_publicKey;
   p2p_address = req.body.p2p_address;
 
   // Add Node to registry
   registered_node = coordinator.addNode(http_address, client_publicKey, p2p_address);
-
   res.send(JSON.stringify(registered_node, undefined, 2));
 });
 
@@ -61,10 +60,25 @@ app.post('/registerNode', (req, res) => {
 III. Node Utilities
 */
 app.post('/getPeers', (req, res) => {
+	console.log("in getPeers")
 	client_constituencyID = req.body.constituencyID;
 	list_of_peers = coordinator.getPeers(client_constituencyID);
 	res.send(list_of_peers);
 })
+
+app.post('/leaderUpdate', (req, res) => {
+	client_constituencyID = req.body.constituencyID;
+	http_address = req.body.http_address;
+	p2p_address = req.body.p2p_address;
+	coordinator.updateLeader(client_constituencyID, http_address, p2p_address);
+	console.log("New leader of Constituency "+client_constituencyID+" is "+http_address)
+	res.send("Leader Updated...")
+});
+
+app.get('/blockMined', (req, res) => {
+	coordinator.updateVisualisation({"type": "blockMined", "data": req.param('miner'), "constituencyID": req.param('constituencyID')})
+});
+
 
 
 app.listen(HTTP_PORT, () => console.log(`Coordinator Node listening on port ${HTTP_PORT}`));

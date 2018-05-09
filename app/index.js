@@ -11,16 +11,25 @@ const request = require('request');
 const leaderElection = require("exp-leader-election");
 
 const HTTP_PORT = process.env.HTTP_PORT || 3005;
+const P2P_PORT = process.env.P2P_PORT || 5005;
 
 const app = express();
 const bc = new Blockchain();
 const wallet = new Wallet();
-const tp = new TransactionPool();
-const p2pServer = new P2pServer(bc, tp);
-const miner = new Miner(bc, tp, wallet, p2pServer);
+
+
+let p2pServer = {};
 
 var counter = 0;
 let node_configuration = {};
+let flag = 0;
+let peers = [];
+let init_flag = false;
+
+const tp = new TransactionPool();
+p2pServer = new P2pServer(bc, tp, P2P_PORT, peers);
+const miner = new Miner(bc, tp, wallet, p2pServer);
+p2pServer.listen();
 
 /*
 ************************************************************
@@ -41,23 +50,60 @@ function getConfiguration(){
       url: 'http://127.0.0.1:8700/registerNode',
       method: 'POST',
       headers: headers,
-      form: {'http_address': '127.0.0.1:'+HTTP_PORT, 'client_publicKey': client_publicKey, 'p2p_address': "ws://localhost:"+p2pServer.p2p_port}
+      form: {'http_address': '127.0.0.1:'+HTTP_PORT, 'client_publicKey': client_publicKey, 'p2p_address': "ws://localhost:"+P2P_PORT}
   }
 
   // Start the request
   request(options, function (error, response, body) {
       if (!error && response.statusCode == 200) {
-          // Print out the response body
-          console.log("Configuration:\n"+JSON.parse(body))
-          node_configuration = JSON.parse(body);
-          clearInterval(pinging_coordinator);
-          setTimeout(leadership, 3000);     // Only after receiving configuration, node can take part in electoral duties
+            node_configuration = JSON.parse(body);
+            console.log("NODE CONFIGURATION:\n"+JSON.stringify(node_configuration, undefined, 2));
+            current_peers = node_configuration.peers;
+            for(var i=0; i<current_peers.length; i++){
+              if(current_peers[i]=="ws://localhost:"+P2P_PORT){
+                continue;
+              } else {
+
+              }
+            }
+            clearInterval(pinging_coordinator);
+            setTimeout(getConstituencyPeers, 10000);    
       }
   })
 }
 
 // If Coordinator isn't alive, keep pinging it till it comes to life
-let pinging_coordinator = setInterval(getConfiguration, 3000);
+let pinging_coordinator = setInterval(getConfiguration, 5000);
+
+function getConstituencyPeers(){
+    // Set the headers
+    var headers = {
+        'User-Agent':       'Super Agent/0.0.1',
+        'Content-Type':     'application/x-www-form-urlencoded'
+    }
+
+    // Configure the request
+    var options = {
+        url: 'http://127.0.0.1:8700/getPeers',
+        method: 'POST',
+        headers: headers,
+        form: {'constituencyID':node_configuration.constituencyID}
+    }
+
+
+    // Start the request
+    request(options, function (error, response, body) {
+        if (!error && response.statusCode == 200) {
+            peers = JSON.parse(body);
+            console.log("NEWEST PEERS: "+ peers);
+            p2pServer.updatePeers(peers);
+            if(!init_flag){
+              setTimeout(leadership, 5000);
+              init_flag = true;
+            }
+        }
+    });
+} 
 
 /*
 ************************************************************
@@ -71,36 +117,54 @@ II. Leader Election Functionality
 ************************************************************
 */
 
-var config = {
-  key: "service/leadElection/leader",
-  consul : {
-    host: "127.0.0.1",
-    port: 8500,
-    ttl: 15,
-    lockDelay: 2,
-    readWait: 5
-  }
-}
 
 function printCounter(){
   console.log(counter++);
 }
 
 function leadership(){
+  var config = {
+    key: node_configuration.constituency, //Add functionality for constituency specific election
+    consul : {
+      host: "127.0.0.1",
+      port: 8500,
+      ttl: 15,
+      lockDelay: 2,
+      readWait: 5
+    }
+  }
+
+  setInterval(getConstituencyPeers, 60000);
+  console.log("In Elections")  
+  p2pServer.setConstituencyID(node_configuration.constituencyID);
   leaderElection(config)
   .on("gainedLeadership", function () {
-      // Whoo-hoo, we have been elected as leader! Do work.
-      console.log("I am leader...")
-      //setInterval(printCounter, 2000);
-      function startBettingRound() {
-        console.log("IN startBettingRound...")
-        p2pServer.broadcastBettingRound("ws://localhost:"+p2pServer.p2p_port, node_configuration.constituencyID)
-      }
-      setTimeout(startBettingRound, 5000);
+        console.log("I am leader...");
+        var headers = {
+        'User-Agent':       'Super Agent/0.0.1',
+        'Content-Type':     'application/x-www-form-urlencoded'
+        }
+
+        // Configure the request
+        var options = {
+            url: 'http://127.0.0.1:8700/leaderUpdate',
+            method: 'POST',
+            headers: headers,
+            form: {'constituencyID': node_configuration.constituencyID, 'http_address': node_configuration.http_address, 'p2p_address': node_configuration.p2p_address}
+        }
+        // Start the request
+        request(options, function (error, response, body) {
+            if (!error && response.statusCode == 200) {
+                console.log(body);
+                console.log("Leader Updated to: "+node_configuration.http_address);
+            }
+        });
+        p2pServer.PoS();
+
     })
   .on("error", function () {
      // Error occured, stop work.
-     log.error("Leader election error occured", error);
+     console.log("Leader election error occured", error);
     });
 }
 
@@ -132,7 +196,9 @@ app.get('/transactions', (req, res) => {
 app.post('/transact', (req, res) => {
   const { recipient, amount } = req.body;
   const transaction = wallet.createTransaction(recipient, amount, bc, tp);
+  //console.log("Just Checking: "+JSON.stringify(transaction));
   p2pServer.broadcastTransaction(transaction);
+  console.log("Received transaction:\nRecipient: "+recipient+"\nAmount: "+amount);
   res.redirect('/transactions');
 });
 
@@ -147,4 +213,3 @@ app.get('/public-key', (req, res) => {
 });
 
 app.listen(HTTP_PORT, () => console.log(`Listening on port ${HTTP_PORT}`));
-p2pServer.listen();
